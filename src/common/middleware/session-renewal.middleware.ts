@@ -25,7 +25,7 @@ export class SessionRenewalMiddleware implements NestMiddleware {
 
     try {
       const user = await this.authService.getAuthenticatedUser(sessionToken);
-      this.authService.renewSession(response, user.id);
+      this.authService.renewSession(response, user.id, user.isAdmin);
     } catch {
       // Ignore invalid or expired sessions here; the downstream route will enforce auth if needed.
     }

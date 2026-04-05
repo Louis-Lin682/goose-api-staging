@@ -35,7 +35,7 @@ export class AdminNotificationsController {
   ): Promise<AdminNotificationsResponse> {
     const user = await this.getAuthenticatedUser(cookieHeader);
     if (response) {
-      this.authService.renewSession(response, user.id);
+      this.authService.renewSession(response, user.id, user.isAdmin);
     }
     return this.notificationsService.getAdminNotifications(user.id);
   }
@@ -47,7 +47,7 @@ export class AdminNotificationsController {
   ): Promise<MarkAllNotificationsReadResponse> {
     const user = await this.getAuthenticatedUser(cookieHeader);
     if (response) {
-      this.authService.renewSession(response, user.id);
+      this.authService.renewSession(response, user.id, user.isAdmin);
     }
     return this.notificationsService.markAllAsRead(user.id);
   }
@@ -60,7 +60,7 @@ export class AdminNotificationsController {
   ): Promise<MarkNotificationReadResponse> {
     const user = await this.getAuthenticatedUser(cookieHeader);
     if (response) {
-      this.authService.renewSession(response, user.id);
+      this.authService.renewSession(response, user.id, user.isAdmin);
     }
     return this.notificationsService.markAsRead(user.id, notificationId);
   }

@@ -38,7 +38,7 @@ export class OrdersController {
     }
 
     if (response) {
-      this.authService.renewSession(response, user.id);
+      this.authService.renewSession(response, user.id, user.isAdmin);
     }
 
     return this.ordersService.createOrder(createOrderDto, user.id);
@@ -52,7 +52,7 @@ export class OrdersController {
     const user = await this.getAuthenticatedUser(cookieHeader);
 
     if (user && response) {
-      this.authService.renewSession(response, user.id);
+      this.authService.renewSession(response, user.id, user.isAdmin);
     }
 
     return this.ordersService.getOrderHistory(user?.id);

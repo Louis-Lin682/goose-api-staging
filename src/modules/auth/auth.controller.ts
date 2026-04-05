@@ -40,13 +40,13 @@ export class AuthController {
     const result = await this.authService.login(loginDto);
     const sessionToken = this.authService.createSessionToken(
       result.user.id,
-      Boolean(loginDto.remember),
+      result.user.isAdmin,
     );
 
     response.cookie(
       AUTH_COOKIE_NAME,
       sessionToken,
-      this.authService.getCookieOptions(Boolean(loginDto.remember)),
+      this.authService.getCookieOptions(result.user.isAdmin),
     );
 
     return result;
@@ -73,13 +73,13 @@ export class AuthController {
       const result = await this.authService.handleLineCallback({ code, state });
       const sessionToken = this.authService.createSessionToken(
         result.user.id,
-        true,
+        result.user.isAdmin,
       );
 
       response.cookie(
         AUTH_COOKIE_NAME,
         sessionToken,
-        this.authService.getCookieOptions(true),
+        this.authService.getCookieOptions(result.user.isAdmin),
       );
       response.redirect(result.redirectUrl);
     } catch (error) {
@@ -113,7 +113,7 @@ export class AuthController {
     }
 
     const user = await this.authService.getAuthenticatedUser(sessionToken);
-    this.authService.renewSession(response, user.id);
+    this.authService.renewSession(response, user.id, user.isAdmin);
 
     return { user };
   }

@@ -20,7 +20,8 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 
-const SESSION_TIMEOUT_IN_MS = 30 * 60 * 1000;
+const ADMIN_SESSION_TIMEOUT_IN_MS = 30 * 60 * 1000;
+const CUSTOMER_SESSION_TIMEOUT_IN_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_RESET_TOKEN_TTL_IN_MS = 30 * 60 * 1000;
 const LINE_STATE_TIMEOUT_IN_MS = 10 * 60 * 1000;
 const LINE_AUTH_BASE_URL = 'https://access.line.me/oauth2/v2.1/authorize';
@@ -392,9 +393,8 @@ export class AuthService {
     return this.toAuthUser(syncedUser);
   }
 
-  createSessionToken(userId: string, remember: boolean): string {
-    void remember;
-    const expiresAt = Date.now() + SESSION_TIMEOUT_IN_MS;
+  createSessionToken(userId: string, isAdmin: boolean): string {
+    const expiresAt = Date.now() + this.getSessionTimeoutInMs(isAdmin);
     const payload = Buffer.from(
       JSON.stringify({
         sub: userId,
@@ -407,17 +407,20 @@ export class AuthService {
     return `${payload}.${signature}`;
   }
 
-  getCookieOptions(remember: boolean): CookieOptions {
-    void remember;
+  getCookieOptions(isAdmin: boolean): CookieOptions {
     return {
       ...this.getCookieBaseOptions(),
-      maxAge: SESSION_TIMEOUT_IN_MS,
+      maxAge: this.getSessionTimeoutInMs(isAdmin),
     };
   }
 
-  renewSession(response: Response, userId: string): void {
-    const sessionToken = this.createSessionToken(userId, true);
-    response.cookie('goose_session', sessionToken, this.getCookieOptions(true));
+  renewSession(response: Response, userId: string, isAdmin: boolean): void {
+    const sessionToken = this.createSessionToken(userId, isAdmin);
+    response.cookie(
+      'goose_session',
+      sessionToken,
+      this.getCookieOptions(isAdmin),
+    );
   }
 
   getClearCookieOptions(): CookieOptions {
@@ -443,6 +446,12 @@ export class AuthService {
       secure,
       path: '/',
     };
+  }
+
+  private getSessionTimeoutInMs(isAdmin: boolean): number {
+    return isAdmin
+      ? ADMIN_SESSION_TIMEOUT_IN_MS
+      : CUSTOMER_SESSION_TIMEOUT_IN_MS;
   }
 
   private verifySessionToken(sessionToken: string): SessionPayload {

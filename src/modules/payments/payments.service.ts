@@ -388,7 +388,10 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
         const nextOrderStatus =
           nextPaymentStatus === PaymentStatus.REFUNDED
             ? OrderStatus.REFUNDED
-            : previousStatus;
+            : previousStatus === OrderStatus.REFUNDED ||
+                previousStatus === OrderStatus.REFUND_PROCESSING
+              ? OrderStatus.PAID
+              : previousStatus;
 
       await this.prisma.$transaction(async (tx) => {
         for (const item of refundPlan.items) {
@@ -775,5 +778,6 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       .replace(/%29/g, ')');
   }
 }
+
 
 

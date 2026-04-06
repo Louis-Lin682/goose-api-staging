@@ -479,7 +479,11 @@ export class OrdersService {
       pickupStoreCode: string | null;
       pickupStoreName: string | null;
       pickupStoreAddress: string | null;
-      note: string | null;`r`n      refundedAmount: number;`r`n      refundReason: string | null;`r`n      refundedAt: Date | null;`r`n      subtotal: number;
+      note: string | null;
+      refundedAmount: number;
+      refundReason: string | null;
+      refundedAt: Date | null;
+      subtotal: number;
       shippingFee: number;
       codFee: number;
       totalAmount: number;
@@ -492,7 +496,9 @@ export class OrdersService {
         itemSubCategory: string;
         variant: string;
         unitPrice: number;
-        quantity: number;`r`n        refundedQuantity: number;`r`n        lineTotal: number;
+        quantity: number;
+        refundedQuantity: number;
+        lineTotal: number;
       }>;
     }>,
   ): OrderHistoryEntry[] {
@@ -728,6 +734,8 @@ export class OrdersService {
     return `GO${yyyymmdd}${suffix}`;
   }
 }
+
+
 
 
 

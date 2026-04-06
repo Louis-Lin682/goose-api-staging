@@ -358,12 +358,21 @@ export class OrdersService {
       const countedKeys = new Set<string>();
 
       for (const item of order.items) {
+        const refundedQuantity = item.refundedQuantity ?? 0;
+        const remainingQuantity = Math.max(item.quantity - refundedQuantity, 0);
+
+        if (remainingQuantity <= 0) {
+          continue;
+        }
+
+        const refundedLineTotal = refundedQuantity * item.unitPrice;
+        const remainingRevenue = Math.max(item.lineTotal - refundedLineTotal, 0);
         const productKey = `${item.itemName}::${item.itemSubCategory}::${item.variant}`;
         const current = productMap.get(productKey);
 
         if (current) {
-          current.quantitySold += item.quantity;
-          current.revenue += item.lineTotal;
+          current.quantitySold += remainingQuantity;
+          current.revenue += remainingRevenue;
 
           if (!countedKeys.has(productKey)) {
             current.orderCount += 1;
@@ -375,8 +384,8 @@ export class OrdersService {
             category: item.itemCategory,
             subCategory: item.itemSubCategory,
             variant: item.variant,
-            quantitySold: item.quantity,
-            revenue: item.lineTotal,
+            quantitySold: remainingQuantity,
+            revenue: remainingRevenue,
             orderCount: 1,
           });
         }
@@ -400,12 +409,16 @@ export class OrdersService {
       .slice(0, 10);
 
     const totalRevenue = orders.reduce(
-      (sum, order) => sum + order.totalAmount,
+      (sum, order) => sum + Math.max(order.totalAmount - (order.refundedAmount ?? 0), 0),
       0,
     );
     const totalItemsSold = orders.reduce(
       (sum, order) =>
-        sum + order.items.reduce((itemSum, item) => itemSum + item.quantity, 0),
+        sum +
+        order.items.reduce(
+          (itemSum, item) => itemSum + Math.max(item.quantity - (item.refundedQuantity ?? 0), 0),
+          0,
+        ),
       0,
     );
 
@@ -417,7 +430,7 @@ export class OrdersService {
         endDate: this.formatDateOnly(range.end),
       },
       totalRevenue,
-      totalOrders: orders.length,
+      totalOrders: orders.filter((order) => Math.max(order.totalAmount - (order.refundedAmount ?? 0), 0) > 0).length,
       totalItemsSold,
       topProducts,
     };
@@ -734,6 +747,8 @@ export class OrdersService {
     return `GO${yyyymmdd}${suffix}`;
   }
 }
+
+
 
 
 

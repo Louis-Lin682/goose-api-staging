@@ -380,12 +380,15 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
         tradeNo: order.tradeNo,
         amount: refundPlan.amount,
       });
-
-      const nextRefundedAmount = order.refundedAmount + refundPlan.amount;
-      const nextPaymentStatus =
-        nextRefundedAmount >= order.totalAmount
-          ? PaymentStatus.REFUNDED
-          : PaymentStatus.PARTIALLY_REFUNDED;
+        const nextRefundedAmount = order.refundedAmount + refundPlan.amount;
+        const nextPaymentStatus =
+          nextRefundedAmount >= order.totalAmount
+            ? PaymentStatus.REFUNDED
+            : PaymentStatus.PARTIALLY_REFUNDED;
+        const nextOrderStatus =
+          nextPaymentStatus === PaymentStatus.REFUNDED
+            ? OrderStatus.REFUNDED
+            : previousStatus;
 
       await this.prisma.$transaction(async (tx) => {
         for (const item of refundPlan.items) {
@@ -402,8 +405,8 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
         await tx.order.update({
           where: { id: order.id },
           data: {
-            status: OrderStatus.REFUNDED,
-            paymentStatus: nextPaymentStatus,
+            status: nextOrderStatus,
+              paymentStatus: nextPaymentStatus,
             refundedAmount: nextRefundedAmount,
             refundReason: refundOrderDto.reason?.trim() || null,
             refundedAt: new Date(),
@@ -427,8 +430,8 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
             : '已完成部分刷退。',
         orderId: order.id,
         orderNumber: order.orderNumber,
-        status: OrderStatus.REFUNDED,
-        paymentStatus: nextPaymentStatus,
+        status: nextOrderStatus,
+              paymentStatus: nextPaymentStatus,
         refundedAmount: nextRefundedAmount,
       };
     } catch (error) {
@@ -772,4 +775,5 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       .replace(/%29/g, ')');
   }
 }
+
 

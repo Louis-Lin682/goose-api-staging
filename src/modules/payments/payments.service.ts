@@ -77,6 +77,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
   }
 
   onModuleInit(): void {
+    // Keep abandoned online-payment orders from staying payable forever.
     void this.cancelExpiredUnpaidOrders();
     this.unpaidOrderSweepTimer = setInterval(() => {
       void this.cancelExpiredUnpaidOrders();
@@ -108,25 +109,27 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (order.userId && userId && order.userId !== userId) {
-      throw new ForbiddenException('³oµ§­q³æ¤£Äİ©ó¥Ø«eµn¤Jªº·|­û¡C');
+      throw new ForbiddenException('é€™ç­†è¨‚å–®ä¸å±¬æ–¼ç›®å‰ç™»å…¥çš„æœƒå“¡ã€‚');
     }
 
     if (!order.userId && userId === undefined) {
-      throw new ForbiddenException('½Ğ¥ıµn¤J·|­û¡A¦A«Ø¥ß¥I´Ú¡C');
+      throw new ForbiddenException('è«‹å…ˆç™»å…¥æœƒå“¡ï¼Œå†å»ºç«‹ä»˜æ¬¾ã€‚');
     }
 
     if (order.paymentMethod !== PaymentMethod.online) {
-      throw new BadRequestException('¥u¦³½u¤W¥I´Ú­q³æ¤~¯à«Ø¥ßºñ¬É¥I´Ú¡C');
+      throw new BadRequestException('åªæœ‰ç·šä¸Šä»˜æ¬¾è¨‚å–®æ‰èƒ½å»ºç«‹ç¶ ç•Œä»˜æ¬¾ã€‚');
     }
 
     if (order.paymentStatus === PaymentStatus.PAID) {
-      throw new BadRequestException('³oµ§­q³æ¤w§¹¦¨¥I´Ú¡C');
+      throw new BadRequestException('é€™ç­†è¨‚å–®å·²å®Œæˆä»˜æ¬¾ã€‚');
     }
 
     if (!this.merchantId || !this.hashKey || !this.hashIv) {
-      throw new InternalServerErrorException('ºñ¬Éª÷¬y©|¥¼§¹¦¨³]©w¡C');
+      throw new InternalServerErrorException('ç¶ ç•Œé‡‘æµå°šæœªå®Œæˆè¨­å®šã€‚');
     }
 
+    // Reuse the plain order number for the first payment attempt, then append a retry
+    // suffix on subsequent attempts so ECPay accepts a fresh checkout for the same order.
     const merchantTradeNo = order.merchantTradeNo
       ? this.buildRetryMerchantTradeNo(order.orderNumber)
       : order.orderNumber;
@@ -231,7 +234,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       (this.configService.get<string>('NODE_ENV') ?? 'development') ===
       'production'
     ) {
-      throw new ForbiddenException('¥¿¦¡Àô¹Ò¤£¥i¨Ï¥Î¼ÒÀÀ¥I´Ú¥\¯à¡C');
+      throw new ForbiddenException('æ­£å¼ç’°å¢ƒä¸å¯ä½¿ç”¨æ¨¡æ“¬ä»˜æ¬¾åŠŸèƒ½ã€‚');
     }
 
     const order = await this.prisma.order.findUnique({
@@ -249,7 +252,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (order.paymentMethod !== PaymentMethod.online) {
-      throw new BadRequestException('¥u¦³½u¤W¥I´Ú­q³æ¤~¯à¼ÒÀÀ¥I´Ú¦¨¥\¡C');
+      throw new BadRequestException('åªæœ‰ç·šä¸Šä»˜æ¬¾è¨‚å–®æ‰èƒ½æ¨¡æ“¬ä»˜æ¬¾æˆåŠŸã€‚');
     }
 
     if (order.paymentStatus !== PaymentStatus.PAID) {
@@ -268,7 +271,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     this.logger.log(`ECPay simulated paid for order ${order.orderNumber}`);
 
     return {
-      message: '¤w¼ÒÀÀ¥I´Ú¦¨¥\¡C',
+      message: 'å·²æ¨¡æ“¬ä»˜æ¬¾æˆåŠŸã€‚',
       orderId: order.id,
       orderNumber: order.orderNumber,
       status: OrderStatus.PENDING,
@@ -339,14 +342,14 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (order.paymentMethod !== PaymentMethod.online) {
-      throw new BadRequestException('¥u¦³½u¤W¥I´Ú­q³æ¤~¯à¨ê°h¡C');
+      throw new BadRequestException('åªæœ‰ç·šä¸Šä»˜æ¬¾è¨‚å–®æ‰èƒ½åˆ·é€€ã€‚');
     }
 
     if (
       order.paymentStatus !== PaymentStatus.PAID &&
       order.paymentStatus !== PaymentStatus.PARTIALLY_REFUNDED
     ) {
-      throw new BadRequestException('³oµ§­q³æ¥Ø«e¤£¥i¨ê°h¡C');
+      throw new BadRequestException('é€™ç­†è¨‚å–®ç›®å‰ä¸å¯åˆ·é€€ã€‚');
     }
 
     if (
@@ -354,17 +357,18 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       order.status === OrderStatus.COMPLETED ||
       order.status === OrderStatus.CANCELLED
     ) {
-      throw new BadRequestException('¤w¥X³f©Î¤wµ²®×­q³æ¤£¥i¨ê°h¡C');
+      throw new BadRequestException('å·²å‡ºè²¨æˆ–å·²çµæ¡ˆè¨‚å–®ä¸å¯åˆ·é€€ã€‚');
     }
 
     if (!order.merchantTradeNo || !order.tradeNo) {
-      throw new BadRequestException('¯Ê¤Öºñ¬É¥æ©ö¸ê°T¡AµLªk¶i¦æ¨ê°h¡C');
+      throw new BadRequestException('ç¼ºå°‘ç¶ ç•Œäº¤æ˜“è³‡è¨Šï¼Œç„¡æ³•é€²è¡Œåˆ·é€€ã€‚');
     }
 
+    // Build a normalized refund plan first so full and partial refunds share one validation path.
     const refundPlan = this.buildRefundPlan(order, refundOrderDto);
 
     if (refundPlan.amount <= 0) {
-      throw new BadRequestException('°h´Úª÷ÃB»İ¤j©ó 0¡C');
+      throw new BadRequestException('é€€æ¬¾é‡‘é¡éœ€å¤§æ–¼ 0ã€‚');
     }
 
     const previousStatus = order.status;
@@ -375,6 +379,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     });
 
     try {
+      // Only persist refunded quantities and amounts after ECPay confirms the refund request.
       await this.issueEcpayRefund({
         merchantTradeNo: order.merchantTradeNo,
         tradeNo: order.tradeNo,
@@ -388,6 +393,8 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
         const nextOrderStatus =
           nextPaymentStatus === PaymentStatus.REFUNDED
             ? OrderStatus.REFUNDED
+            // Older partial refunds could leave the order stuck as REFUNDED.
+            // Normalize those legacy cases back to a payable state while a balance remains.
             : previousStatus === OrderStatus.REFUNDED ||
                 previousStatus === OrderStatus.REFUND_PROCESSING
               ? OrderStatus.PAID
@@ -429,8 +436,8 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       return {
         message:
           nextPaymentStatus === PaymentStatus.REFUNDED
-            ? '¤w§¹¦¨¥şÃB¨ê°h¡C'
-            : '¤w§¹¦¨³¡¤À¨ê°h¡C',
+            ? 'å·²å®Œæˆå…¨é¡åˆ·é€€ã€‚'
+            : 'å·²å®Œæˆéƒ¨åˆ†åˆ·é€€ã€‚',
         orderId: order.id,
         orderNumber: order.orderNumber,
         status: nextOrderStatus,
@@ -638,6 +645,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     order: {
       totalAmount: number;
       refundedAmount: number;
+      shippingFee: number;
       items: Array<{
         id: string;
         unitPrice: number;
@@ -663,13 +671,13 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       const target = order.items.find((item) => item.id === requestedItem.orderItemId);
 
       if (!target) {
-        throw new BadRequestException('°h´Ú«~¶µ¤£¦s¦b¡C');
+        throw new BadRequestException('é€€æ¬¾å“é …ä¸å­˜åœ¨ã€‚');
       }
 
       const remainingQuantity = target.quantity - target.refundedQuantity;
 
       if (requestedItem.quantity > remainingQuantity) {
-        throw new BadRequestException('°h´Ú¼Æ¶q¶W¹L¥i°h½d³ò¡C');
+        throw new BadRequestException('é€€æ¬¾æ•¸é‡è¶…éå¯é€€ç¯„åœã€‚');
       }
 
       return {
@@ -679,12 +687,23 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       };
     });
 
+    const refundedItemsAmount = order.items.reduce(
+      (sum, item) => sum + item.refundedQuantity * item.unitPrice,
+      0,
+    );
+    const refundedShippingFee = Math.max(order.refundedAmount - refundedItemsAmount, 0);
+    const remainingShippingFee = Math.max(order.shippingFee - refundedShippingFee, 0);
+    const includeShippingFee = Boolean(
+      refundOrderDto.refundShippingFee && remainingShippingFee > 0,
+    );
+
     return {
-      amount: items.reduce((sum, item) => sum + item.amount, 0),
+      amount:
+        items.reduce((sum, item) => sum + item.amount, 0) +
+        (includeShippingFee ? remainingShippingFee : 0),
       items: items.map(({ orderItemId, quantity }) => ({ orderItemId, quantity })),
     };
   }
-
   private async issueEcpayRefund(params: {
     merchantTradeNo: string;
     tradeNo: string;
@@ -712,18 +731,18 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     const parsed = Object.fromEntries(new URLSearchParams(rawText));
 
     if (!response.ok) {
-      throw new InternalServerErrorException('ºñ¬É°h´Ú½Ğ¨D¥¢±Ñ¡C');
+      throw new InternalServerErrorException('ç¶ ç•Œé€€æ¬¾è«‹æ±‚å¤±æ•—ã€‚');
     }
 
     const rtnCode = parsed.RtnCode ?? parsed.rtnCode;
     if (rtnCode !== '1') {
-      throw new BadRequestException(parsed.RtnMsg || parsed.rtnMsg || 'ºñ¬É¨ê°h¥¢±Ñ¡C');
+      throw new BadRequestException(parsed.RtnMsg || parsed.rtnMsg || 'ç¶ ç•Œåˆ·é€€å¤±æ•—ã€‚');
     }
 
     return parsed;
   }
   private buildItemName(itemNames: string[]): string {
-    const fallback = 'ÃZ§@ªÀ­q³æ';
+    const fallback = 'éµä½œç¤¾è¨‚å–®';
     const joined = itemNames.filter(Boolean).join('#').trim();
 
     if (!joined) {
@@ -778,6 +797,13 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       .replace(/%29/g, ')');
   }
 }
+
+
+
+
+
+
+
 
 
 

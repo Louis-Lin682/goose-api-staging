@@ -1,15 +1,14 @@
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
-  ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsEnum,
   IsInt,
   IsOptional,
   IsString,
   MaxLength,
   Min,
-  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 
@@ -37,9 +36,13 @@ export class RefundOrderDto {
   @MaxLength(300)
   reason?: string;
 
-  @ValidateIf((value: RefundOrderDto) => value.mode === RefundRequestMode.PARTIAL)
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  refundShippingFee?: boolean;
+
+  @IsOptional()
   @IsArray()
-  @ArrayMinSize(1)
   @ArrayMaxSize(50)
   @ValidateNested({ each: true })
   @Type(() => RefundOrderItemDto)

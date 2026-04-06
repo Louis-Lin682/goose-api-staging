@@ -1,4 +1,4 @@
-﻿import {
+import {
   BadRequestException,
   ConflictException,
   Injectable,
@@ -20,6 +20,8 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 
+// Storefront sessions stay longer to survive browsing and payment flows; admin sessions
+// stay shorter because the backend console is more sensitive.
 const ADMIN_SESSION_TIMEOUT_IN_MS = 30 * 60 * 1000;
 const CUSTOMER_SESSION_TIMEOUT_IN_MS = 12 * 60 * 60 * 1000;
 const PASSWORD_RESET_TOKEN_TTL_IN_MS = 30 * 60 * 1000;
@@ -159,7 +161,7 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new UnauthorizedException('手機號碼、Email 或密碼錯誤');
+      throw new UnauthorizedException('?????Email ?????');
     }
 
     const isPasswordValid = await argon2.verify(
@@ -168,7 +170,7 @@ export class AuthService {
     );
 
     if (!isPasswordValid) {
-      throw new UnauthorizedException('手機號碼、Email 或密碼錯誤');
+      throw new UnauthorizedException('?????Email ?????');
     }
 
     const syncedUser = await this.syncBootstrapAdminRole({
@@ -191,6 +193,7 @@ export class AuthService {
   createLineAuthorizationUrl(mode: 'login' | 'register'): {
     authorizationUrl: string;
   } {
+    // Use a signed state token so the callback cannot be forged or replayed out of context.
     const nonce = randomBytes(16).toString('hex');
     const callbackUrl = this.getLineLoginRedirectUri();
     const channelId = this.getRequiredLineConfig('LINE_LOGIN_CHANNEL_ID');
@@ -254,7 +257,7 @@ export class AuthService {
 
     if (!user) {
       return {
-        message: '若此 Email 已註冊，我們已寄送密碼重設連結。',
+        message: '?? Email ????????????????',
       };
     }
 
@@ -262,6 +265,7 @@ export class AuthService {
     const tokenHash = this.hashResetToken(rawToken);
     const expiresAt = new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_IN_MS);
 
+    // Keep only the newest reset token usable for this member.
     await this.prisma.passwordResetToken.deleteMany({
       where: {
         OR: [{ userId: user.id }, { expiresAt: { lt: new Date() } }],
@@ -282,7 +286,7 @@ export class AuthService {
     const resetLink = `${frontendAppUrl}/forgot-password?token=${rawToken}`;
 
     const response: ForgotPasswordResponse = {
-      message: '若此 Email 已註冊，我們已寄送密碼重設連結。',
+      message: '?? Email ????????????????',
     };
 
     if (this.shouldExposeResetToken()) {
@@ -299,7 +303,7 @@ export class AuthService {
         expiresAt,
       });
     } else if (!this.shouldExposeResetToken()) {
-      throw new InternalServerErrorException('Email 寄送服務尚未設定完成。');
+      throw new InternalServerErrorException('Email ???????????');
     }
 
     return response;
@@ -324,7 +328,7 @@ export class AuthService {
     });
 
     if (!resetToken) {
-      throw new UnauthorizedException('重設連結無效或已過期。');
+      throw new UnauthorizedException('???????????');
     }
 
     const passwordHash = await argon2.hash(resetPasswordDto.password);
@@ -348,7 +352,7 @@ export class AuthService {
     ]);
 
     return {
-      message: '密碼已重設成功。',
+      message: '????????',
     };
   }
 
@@ -381,6 +385,7 @@ export class AuthService {
         throw error;
       }
 
+      // Retry once so a transient DB wake-up does not immediately log the user out.
       await new Promise((resolve) => setTimeout(resolve, 1500));
       user = await findUser();
     }
@@ -393,6 +398,7 @@ export class AuthService {
     return this.toAuthUser(syncedUser);
   }
 
+  // Admin and storefront share one cookie name, but the expiry is role-based.
   createSessionToken(userId: string, isAdmin: boolean): string {
     const expiresAt = Date.now() + this.getSessionTimeoutInMs(isAdmin);
     const payload = Buffer.from(
@@ -584,7 +590,7 @@ export class AuthService {
     const from = process.env.EMAIL_FROM?.trim();
 
     if (!apiKey || !from) {
-      throw new InternalServerErrorException('Email 寄送服務尚未設定完成。');
+      throw new InternalServerErrorException('Email ???????????');
     }
 
     const replyTo = process.env.EMAIL_REPLY_TO?.trim();
@@ -598,22 +604,22 @@ export class AuthService {
 
     const html = `
       <div style="font-family: Arial, 'Noto Sans TC', sans-serif; line-height: 1.7; color: #18181b;">
-        <h2 style="margin-bottom: 16px;">Hi ${args.name}，請重設你的鵝作社 - 潮滷獅頭鵝專賣密碼</h2>
-        <p>我們收到一筆密碼重設請求，請點擊下方按鈕繼續。</p>
+        <h2 style="margin-bottom: 16px;">Hi ${args.name}????????? - ?????????</h2>
+        <p>???????????????????????</p>
         <p style="margin: 24px 0;">
-          <a href="${args.resetLink}" style="display:inline-block;padding:12px 20px;border-radius:16px;background:#18181b;color:#ffffff;text-decoration:none;font-weight:700;">重設密碼</a>
+          <a href="${args.resetLink}" style="display:inline-block;padding:12px 20px;border-radius:16px;background:#18181b;color:#ffffff;text-decoration:none;font-weight:700;">????</a>
         </p>
-        <p>這封連結將於 <strong>${expiryLabel}</strong> 前有效。</p>
-        <p>如果這不是你本人操作，請直接忽略這封信即可。</p>
+        <p>?????? <strong>${expiryLabel}</strong> ????</p>
+        <p>??????????????????????</p>
       </div>
     `;
 
     const payload: Record<string, unknown> = {
       from,
       to: [args.to],
-      subject: '鵝作社 - 潮滷獅頭鵝專賣 密碼重設通知',
+      subject: '??? - ??????? ??????',
       html,
-      text: `Hi ${args.name}，請使用以下連結重設你的鵝作社 - 潮滷獅頭鵝專賣 密碼：${args.resetLink}。此連結將於 ${expiryLabel} 前有效。`,
+      text: `Hi ${args.name}??????????????? - ??????? ???${args.resetLink}?????? ${expiryLabel} ????`,
     };
 
     if (replyTo) {
@@ -630,7 +636,7 @@ export class AuthService {
     });
 
     if (!response.ok) {
-      throw new InternalServerErrorException('重設信寄送失敗，請稍後再試。');
+      throw new InternalServerErrorException('??????????????');
     }
   }
   private shouldExposeResetToken(): boolean {
@@ -915,3 +921,8 @@ export class AuthService {
     };
   }
 }
+
+
+
+
+

@@ -142,6 +142,7 @@ export class OrdersService {
       (sum, item) => sum + item.lineTotal,
       0,
     );
+    // Always recalculate fees on the server so client-side totals cannot be tampered with.
     const expectedShippingFee = this.getShippingFee(
       subtotal,
       createOrderDto.deliveryMethod,
@@ -198,6 +199,7 @@ export class OrdersService {
 
     const totalAmount = subtotal + expectedShippingFee + expectedCodFee;
 
+    // Create the order and, for logged-in members, backfill a missing address from the latest delivery order.
     const order = await this.prisma.$transaction(async (tx) => {
       const createdOrder = await tx.order.create({
         data: {
@@ -307,6 +309,7 @@ export class OrdersService {
         throw error;
       }
 
+      // Staging DB connections can occasionally wake up slowly; retry once before giving up.
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
       try {
@@ -354,6 +357,8 @@ export class OrdersService {
 
     const productMap = new Map<string, AdminProductStatPoint>();
 
+    // Product stats are calculated from net completed sales, so refunded units no longer
+    // count toward quantity sold, revenue, or top-product rankings.
     for (const order of orders) {
       const countedKeys = new Set<string>();
 
@@ -476,6 +481,8 @@ export class OrdersService {
     return typeof maybeCode === 'string' ? maybeCode : String(maybeCode);
   }
 
+  // Keep refund fields in the shared order payload so admin and member views can render
+  // original totals, refunded amounts, and remaining payable/received amounts consistently.
   private mapOrders(
     orders: Array<{
       id: string;
@@ -747,6 +754,11 @@ export class OrdersService {
     return `GO${yyyymmdd}${suffix}`;
   }
 }
+
+
+
+
+
 
 
 

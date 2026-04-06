@@ -1,4 +1,4 @@
-ï»¿import {
+import {
   BadRequestException,
   ForbiddenException,
   Injectable,
@@ -16,6 +16,7 @@ import {
   PaymentStatus,
 } from '@prisma/client';
 import { createHash } from 'crypto';
+import { RefundOrderDto, RefundRequestMode } from '../orders/dto/refund-order.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -36,6 +37,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
   private readonly hashKey: string;
   private readonly hashIv: string;
   private readonly checkoutAction: string;
+  private readonly refundAction: string;
   private readonly backendBaseUrl: string;
   private readonly frontendBaseUrl: string;
   private unpaidOrderSweepTimer: NodeJS.Timeout | null = null;
@@ -54,6 +56,9 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     this.checkoutAction =
       this.configService.get<string>('ECPAY_CHECKOUT_ACTION') ??
       'https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5';
+    this.refundAction =
+      this.configService.get<string>('ECPAY_REFUND_ACTION') ??
+      'https://payment-stage.ecpay.com.tw/CreditDetail/DoAction';
 
     const port = this.configService.get<string>('PORT') ?? '3001';
     this.backendBaseUrl =
@@ -103,23 +108,23 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (order.userId && userId && order.userId !== userId) {
-      throw new ForbiddenException('é€™ç­†è¨‚å–®ä¸å±¬æ–¼ç›®å‰ç™»å…¥çš„æœƒå“¡ã€‚');
+      throw new ForbiddenException('³oµ§­q³æ¤£Äİ©ó¥Ø«eµn¤Jªº·|­û¡C');
     }
 
     if (!order.userId && userId === undefined) {
-      throw new ForbiddenException('è«‹å…ˆç™»å…¥æœƒå“¡ï¼Œå†å»ºç«‹ä»˜æ¬¾ã€‚');
+      throw new ForbiddenException('½Ğ¥ıµn¤J·|­û¡A¦A«Ø¥ß¥I´Ú¡C');
     }
 
     if (order.paymentMethod !== PaymentMethod.online) {
-      throw new BadRequestException('åªæœ‰ç·šä¸Šä»˜æ¬¾è¨‚å–®æ‰èƒ½å»ºç«‹ç¶ ç•Œä»˜æ¬¾ã€‚');
+      throw new BadRequestException('¥u¦³½u¤W¥I´Ú­q³æ¤~¯à«Ø¥ßºñ¬É¥I´Ú¡C');
     }
 
     if (order.paymentStatus === PaymentStatus.PAID) {
-      throw new BadRequestException('é€™ç­†è¨‚å–®å·²å®Œæˆä»˜æ¬¾ã€‚');
+      throw new BadRequestException('³oµ§­q³æ¤w§¹¦¨¥I´Ú¡C');
     }
 
     if (!this.merchantId || !this.hashKey || !this.hashIv) {
-      throw new InternalServerErrorException('ç¶ ç•Œé‡‘æµå°šæœªå®Œæˆè¨­å®šã€‚');
+      throw new InternalServerErrorException('ºñ¬Éª÷¬y©|¥¼§¹¦¨³]©w¡C');
     }
 
     const merchantTradeNo = order.merchantTradeNo
@@ -226,7 +231,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       (this.configService.get<string>('NODE_ENV') ?? 'development') ===
       'production'
     ) {
-      throw new ForbiddenException('æ­£å¼ç’°å¢ƒä¸å¯ä½¿ç”¨æ¨¡æ“¬ä»˜æ¬¾åŠŸèƒ½ã€‚');
+      throw new ForbiddenException('¥¿¦¡Àô¹Ò¤£¥i¨Ï¥Î¼ÒÀÀ¥I´Ú¥\¯à¡C');
     }
 
     const order = await this.prisma.order.findUnique({
@@ -244,7 +249,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (order.paymentMethod !== PaymentMethod.online) {
-      throw new BadRequestException('åªæœ‰ç·šä¸Šä»˜æ¬¾è¨‚å–®æ‰èƒ½æ¨¡æ“¬ä»˜æ¬¾æˆåŠŸã€‚');
+      throw new BadRequestException('¥u¦³½u¤W¥I´Ú­q³æ¤~¯à¼ÒÀÀ¥I´Ú¦¨¥\¡C');
     }
 
     if (order.paymentStatus !== PaymentStatus.PAID) {
@@ -263,7 +268,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     this.logger.log(`ECPay simulated paid for order ${order.orderNumber}`);
 
     return {
-      message: 'å·²æ¨¡æ“¬ä»˜æ¬¾æˆåŠŸã€‚',
+      message: '¤w¼ÒÀÀ¥I´Ú¦¨¥\¡C',
       orderId: order.id,
       orderNumber: order.orderNumber,
       status: OrderStatus.PENDING,
@@ -308,6 +313,133 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     return '1|OK';
   }
 
+  async refundOrder(
+    orderId: string,
+    adminUserId: string | undefined,
+    refundOrderDto: RefundOrderDto,
+  ): Promise<{
+    message: string;
+    orderId: string;
+    orderNumber: string;
+    status: OrderStatus;
+    paymentStatus: PaymentStatus;
+    refundedAmount: number;
+  }> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        items: {
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException('Order not found.');
+    }
+
+    if (order.paymentMethod !== PaymentMethod.online) {
+      throw new BadRequestException('¥u¦³½u¤W¥I´Ú­q³æ¤~¯à¨ê°h¡C');
+    }
+
+    if (
+      order.paymentStatus !== PaymentStatus.PAID &&
+      order.paymentStatus !== PaymentStatus.PARTIALLY_REFUNDED
+    ) {
+      throw new BadRequestException('³oµ§­q³æ¥Ø«e¤£¥i¨ê°h¡C');
+    }
+
+    if (
+      order.status === OrderStatus.SHIPPED ||
+      order.status === OrderStatus.COMPLETED ||
+      order.status === OrderStatus.CANCELLED
+    ) {
+      throw new BadRequestException('¤w¥X³f©Î¤wµ²®×­q³æ¤£¥i¨ê°h¡C');
+    }
+
+    if (!order.merchantTradeNo || !order.tradeNo) {
+      throw new BadRequestException('¯Ê¤Öºñ¬É¥æ©ö¸ê°T¡AµLªk¶i¦æ¨ê°h¡C');
+    }
+
+    const refundPlan = this.buildRefundPlan(order, refundOrderDto);
+
+    if (refundPlan.amount <= 0) {
+      throw new BadRequestException('°h´Úª÷ÃB»İ¤j©ó 0¡C');
+    }
+
+    const previousStatus = order.status;
+
+    await this.prisma.order.update({
+      where: { id: order.id },
+      data: { status: OrderStatus.REFUND_PROCESSING },
+    });
+
+    try {
+      await this.issueEcpayRefund({
+        merchantTradeNo: order.merchantTradeNo,
+        tradeNo: order.tradeNo,
+        amount: refundPlan.amount,
+      });
+
+      const nextRefundedAmount = order.refundedAmount + refundPlan.amount;
+      const nextPaymentStatus =
+        nextRefundedAmount >= order.totalAmount
+          ? PaymentStatus.REFUNDED
+          : PaymentStatus.PARTIALLY_REFUNDED;
+
+      await this.prisma.$transaction(async (tx) => {
+        for (const item of refundPlan.items) {
+          await tx.orderItem.update({
+            where: { id: item.orderItemId },
+            data: {
+              refundedQuantity: {
+                increment: item.quantity,
+              },
+            },
+          });
+        }
+
+        await tx.order.update({
+          where: { id: order.id },
+          data: {
+            status: OrderStatus.REFUNDED,
+            paymentStatus: nextPaymentStatus,
+            refundedAmount: nextRefundedAmount,
+            refundReason: refundOrderDto.reason?.trim() || null,
+            refundedAt: new Date(),
+          },
+        });
+      });
+
+      this.logger.log(
+        'Refund succeeded for order ' +
+          order.orderNumber +
+          ' by ' +
+          (adminUserId ?? 'unknown-admin') +
+          ' amount ' +
+          refundPlan.amount,
+      );
+
+      return {
+        message:
+          nextPaymentStatus === PaymentStatus.REFUNDED
+            ? '¤w§¹¦¨¥şÃB¨ê°h¡C'
+            : '¤w§¹¦¨³¡¤À¨ê°h¡C',
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        status: OrderStatus.REFUNDED,
+        paymentStatus: nextPaymentStatus,
+        refundedAmount: nextRefundedAmount,
+      };
+    } catch (error) {
+      await this.prisma.order.update({
+        where: { id: order.id },
+        data: { status: previousStatus },
+      });
+
+      throw error;
+    }
+  }
   private async resolveOrderForEcpayPayload(payload: Record<string, string>) {
     const orderId = payload.CustomField1;
     const orderNumber = payload.CustomField2;
@@ -496,8 +628,96 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  private buildRefundPlan(
+    order: {
+      totalAmount: number;
+      refundedAmount: number;
+      items: Array<{
+        id: string;
+        unitPrice: number;
+        quantity: number;
+        refundedQuantity: number;
+      }>;
+    },
+    refundOrderDto: RefundOrderDto,
+  ) {
+    if (refundOrderDto.mode === RefundRequestMode.FULL) {
+      return {
+        amount: order.totalAmount - order.refundedAmount,
+        items: order.items
+          .map((item) => ({
+            orderItemId: item.id,
+            quantity: Math.max(item.quantity - item.refundedQuantity, 0),
+          }))
+          .filter((item) => item.quantity > 0),
+      };
+    }
+
+    const items = (refundOrderDto.items ?? []).map((requestedItem) => {
+      const target = order.items.find((item) => item.id === requestedItem.orderItemId);
+
+      if (!target) {
+        throw new BadRequestException('°h´Ú«~¶µ¤£¦s¦b¡C');
+      }
+
+      const remainingQuantity = target.quantity - target.refundedQuantity;
+
+      if (requestedItem.quantity > remainingQuantity) {
+        throw new BadRequestException('°h´Ú¼Æ¶q¶W¹L¥i°h½d³ò¡C');
+      }
+
+      return {
+        orderItemId: target.id,
+        quantity: requestedItem.quantity,
+        amount: target.unitPrice * requestedItem.quantity,
+      };
+    });
+
+    return {
+      amount: items.reduce((sum, item) => sum + item.amount, 0),
+      items: items.map(({ orderItemId, quantity }) => ({ orderItemId, quantity })),
+    };
+  }
+
+  private async issueEcpayRefund(params: {
+    merchantTradeNo: string;
+    tradeNo: string;
+    amount: number;
+  }): Promise<Record<string, string>> {
+    const fields: EcpayCheckoutFieldMap = {
+      MerchantID: this.merchantId,
+      MerchantTradeNo: params.merchantTradeNo,
+      TradeNo: params.tradeNo,
+      Action: 'R',
+      TotalAmount: String(params.amount),
+    };
+
+    fields.CheckMacValue = this.generateCheckMacValue(fields);
+
+    const response = await fetch(this.refundAction, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+      },
+      body: new URLSearchParams(fields).toString(),
+    });
+
+    const rawText = await response.text();
+    const parsed = Object.fromEntries(new URLSearchParams(rawText));
+
+    if (!response.ok) {
+      throw new InternalServerErrorException('ºñ¬É°h´Ú½Ğ¨D¥¢±Ñ¡C');
+    }
+
+    const rtnCode = parsed.RtnCode ?? parsed.rtnCode;
+    if (rtnCode !== '1') {
+      throw new BadRequestException(parsed.RtnMsg || parsed.rtnMsg || 'ºñ¬É¨ê°h¥¢±Ñ¡C');
+    }
+
+    return parsed;
+  }
   private buildItemName(itemNames: string[]): string {
-    const fallback = 'éµä½œç¤¾è¨‚å–®';
+    const fallback = 'ÃZ§@ªÀ­q³æ';
     const joined = itemNames.filter(Boolean).join('#').trim();
 
     if (!joined) {
@@ -552,3 +772,4 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       .replace(/%29/g, ')');
   }
 }
+

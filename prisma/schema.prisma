@@ -62,6 +62,9 @@ model Order {
   pickupStoreName  String?
   pickupStoreAddress String?
   note             String?
+  refundedAmount   Int             @default(0)
+  refundReason     String?
+  refundedAt       DateTime?
   subtotal         Int
   shippingFee      Int
   codFee           Int
@@ -86,6 +89,7 @@ model OrderItem {
   variant         String
   unitPrice       Int
   quantity        Int
+  refundedQuantity Int      @default(0)
   lineTotal       Int
   order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   createdAt       DateTime @default(now())
@@ -144,6 +148,8 @@ enum PaymentStatus {
   UNPAID
   PAID
   FAILED
+  PARTIALLY_REFUNDED
+  REFUNDED
 }
 
 enum PaymentProvider {
@@ -157,6 +163,8 @@ enum OrderStatus {
   SHIPPED
   COMPLETED
   CANCELLED
+  REFUND_PROCESSING
+  REFUNDED
 }
 
 enum UserRole {
@@ -167,6 +175,7 @@ enum UserRole {
 enum NotificationType {
   NEW_ORDER
 }
+
 
 
 

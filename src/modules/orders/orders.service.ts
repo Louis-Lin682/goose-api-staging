@@ -1,4 +1,4 @@
-﻿import {
+import {
   BadRequestException,
   Injectable,
   NotFoundException,
@@ -30,6 +30,7 @@ export type OrderHistoryItem = {
   unitPrice: number;
   quantity: number;
   lineTotal: number;
+  refundedQuantity: number;
 };
 
 export type OrderHistoryEntry = {
@@ -48,6 +49,9 @@ export type OrderHistoryEntry = {
   pickupStoreName: string | null;
   pickupStoreAddress: string | null;
   note: string | null;
+  refundedAmount: number;
+  refundReason: string | null;
+  refundedAt: Date | null;
   subtotal: number;
   shippingFee: number;
   codFee: number;
@@ -65,6 +69,15 @@ export type UpdateOrderStatusResponse = {
   message: string;
   orderId: string;
   status: string;
+};
+
+export type RefundOrderResponse = {
+  message: string;
+  orderId: string;
+  orderNumber: string;
+  status: string;
+  paymentStatus: string;
+  refundedAmount: number;
 };
 
 export type AdminProductStatsPreset =
@@ -502,6 +515,9 @@ export class OrdersService {
       pickupStoreAddress: order.pickupStoreAddress,
       note: order.note,
       subtotal: order.subtotal,
+      refundedAmount: order.refundedAmount,
+      refundReason: order.refundReason,
+      refundedAt: order.refundedAt,
       shippingFee: order.shippingFee,
       codFee: order.codFee,
       totalAmount: order.totalAmount,
@@ -515,6 +531,7 @@ export class OrdersService {
         variant: item.variant,
         unitPrice: item.unitPrice,
         quantity: item.quantity,
+        refundedQuantity: item.refundedQuantity,
         lineTotal: item.lineTotal,
       })),
     }));
@@ -713,3 +730,5 @@ export class OrdersService {
     return `GO${yyyymmdd}${suffix}`;
   }
 }
+
+

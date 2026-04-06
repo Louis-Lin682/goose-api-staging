@@ -4,23 +4,32 @@ import {
   Get,
   Param,
   Patch,
+  Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { AdminGuard } from '../../common/guards/admin.guard';
+import { PaymentsService } from '../payments/payments.service';
+import { RefundOrderDto } from './dto/refund-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import {
   OrdersService,
   type AdminProductStatsPreset,
   type AdminProductStatsResponse,
   type OrderHistoryResponse,
+  type RefundOrderResponse,
   type UpdateOrderStatusResponse,
 } from './orders.service';
 
 @UseGuards(AdminGuard)
 @Controller('admin/orders')
 export class AdminOrdersController {
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(
+    private readonly ordersService: OrdersService,
+    private readonly paymentsService: PaymentsService,
+  ) {}
 
   @Get()
   getAdminOrders(): Promise<OrderHistoryResponse> {
@@ -50,4 +59,18 @@ export class AdminOrdersController {
       updateOrderStatusDto.status,
     );
   }
+
+  @Post(':orderId/refund')
+  refundOrder(
+    @Param('orderId') orderId: string,
+    @Body() refundOrderDto: RefundOrderDto,
+    @Req() request: Request & { user?: { sub?: string } },
+  ): Promise<RefundOrderResponse> {
+    return this.paymentsService.refundOrder(
+      orderId,
+      request.user?.sub,
+      refundOrderDto,
+    );
+  }
 }
+

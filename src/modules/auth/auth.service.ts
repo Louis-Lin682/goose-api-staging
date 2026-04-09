@@ -233,7 +233,18 @@ export class AuthService {
       tokenResponse.id_token,
       storedState.nonce,
     );
-    const user = await this.findOrCreateLineUser(verifiedProfile);
+    let user: AuthUserRecord;
+
+    try {
+      user = await this.findOrCreateLineUser(verifiedProfile);
+    } catch (error) {
+      if (this.getPrismaErrorCode(error) !== 'ETIMEDOUT') {
+        throw error;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      user = await this.findOrCreateLineUser(verifiedProfile);
+    }
 
     return {
       user: this.toAuthUser(user),

@@ -1,5 +1,5 @@
-import { Controller, Get } from '@nestjs/common';
-import { ProductsService, type ProductsResponse } from './products.service';
+﻿import { Controller, Get } from '@nestjs/common';
+import { ProductsService, type FeaturedProductsResponse, type ProductsResponse } from './products.service';
 
 @Controller('products')
 export class ProductsController {
@@ -9,4 +9,10 @@ export class ProductsController {
   getPublicProducts(): Promise<ProductsResponse> {
     return this.productsService.getPublicProducts();
   }
+
+  @Get('featured')
+  getFeaturedProducts(): Promise<FeaturedProductsResponse> {
+    return this.productsService.getFeaturedProducts();
+  }
 }
+

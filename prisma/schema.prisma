@@ -43,6 +43,14 @@ model Product {
   updatedAt     DateTime @updatedAt
 }
 
+model FeaturedProductSetting {
+  slot        Int      @id
+  productId   String?
+  tag         String?  
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
 model Order {
   id               String          @id @default(cuid())
   orderNumber      String          @unique
@@ -175,6 +183,7 @@ enum UserRole {
 enum NotificationType {
   NEW_ORDER
 }
+
 
 
 

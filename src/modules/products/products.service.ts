@@ -9,6 +9,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { INITIAL_PRODUCT_CATALOG } from './product-catalog';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { UpdateFeaturedProductsDto } from './dto/update-featured-products.dto';
 
 export type ProductEntry = {
   id: string;
@@ -54,6 +55,23 @@ export type UpdateCategoryOrderResponse = {
   message: string;
 };
 
+export type FeaturedProductEntry = {
+  slot: number;
+  productId: string | null;
+  tag: string | null;
+  description: string | null;
+  product: ProductEntry | null;
+};
+
+export type FeaturedProductsResponse = {
+  featuredProducts: FeaturedProductEntry[];
+};
+
+export type UpdateFeaturedProductsResponse = {
+  message: string;
+  featuredProducts: FeaturedProductEntry[];
+};
+
 @Injectable()
 export class ProductsService implements OnModuleInit {
   constructor(private readonly prisma: PrismaService) {}
@@ -62,6 +80,7 @@ export class ProductsService implements OnModuleInit {
     await this.syncInitialCatalog();
     await this.syncInitialCategoryOrder();
     await this.normalizeCategoryOrders();
+    await this.ensureFeaturedProductSlots();
   }
 
   async syncInitialCatalog(): Promise<void> {
@@ -140,6 +159,74 @@ export class ProductsService implements OnModuleInit {
     return { products };
   }
 
+  async getFeaturedProducts(): Promise<FeaturedProductsResponse> {
+    return {
+      featuredProducts: await this.getFeaturedProductEntries(),
+    };
+  }
+
+  async getAdminFeaturedProducts(): Promise<FeaturedProductsResponse> {
+    return {
+      featuredProducts: await this.getFeaturedProductEntries(),
+    };
+  }
+
+  async updateFeaturedProducts(
+    updateFeaturedProductsDto: UpdateFeaturedProductsDto,
+  ): Promise<UpdateFeaturedProductsResponse> {
+    const uniqueSlots = new Set(updateFeaturedProductsDto.featuredProducts.map((item) => item.slot));
+
+    if (uniqueSlots.size !== 3) {
+      throw new BadRequestException('Featured product slots must include 1, 2, and 3 exactly once.');
+    }
+
+    const productIds = updateFeaturedProductsDto.featuredProducts
+      .map((item) => item.productId?.trim())
+      .filter((value): value is string => Boolean(value));
+
+    if (productIds.length > 0) {
+      const existingProducts = await this.prisma.product.findMany({
+        where: {
+          id: {
+            in: productIds,
+          },
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (existingProducts.length !== new Set(productIds).size) {
+        throw new NotFoundException('One or more selected featured products could not be found.');
+      }
+    }
+
+    await this.prisma.$transaction(
+      updateFeaturedProductsDto.featuredProducts.map((item) =>
+        this.prisma.featuredProductSetting.upsert({
+          where: { slot: item.slot },
+          update: {
+            productId: this.toNullableTrimmed(item.productId),
+            tag: this.toNullableTrimmed(item.tag),
+            description: this.toNullableTrimmed(item.description),
+          },
+          create: {
+            slot: item.slot,
+            productId: this.toNullableTrimmed(item.productId),
+            tag: this.toNullableTrimmed(item.tag),
+            description: this.toNullableTrimmed(item.description),
+          },
+        }),
+      ),
+    );
+
+    return {
+      message: '推薦產品已更新。',
+      featuredProducts: await this.getFeaturedProductEntries(),
+    };
+  }
+
+
   async createProduct(
     createProductDto: CreateProductDto,
   ): Promise<CreateProductResponse> {
@@ -212,6 +299,7 @@ export class ProductsService implements OnModuleInit {
     });
 
     await this.normalizeCategoryOrders();
+    await this.ensureFeaturedProductSlots();
 
     return {
       message: '商品新增成功。',
@@ -387,9 +475,15 @@ export class ProductsService implements OnModuleInit {
       throw new NotFoundException('Product not found.');
     }
 
-    await this.prisma.product.delete({
-      where: { id: productId },
-    });
+    await this.prisma.$transaction([
+      this.prisma.featuredProductSetting.updateMany({
+        where: { productId },
+        data: { productId: null },
+      }),
+      this.prisma.product.delete({
+        where: { id: productId },
+      }),
+    ]);
 
     return {
       message: '商品刪除成功。',
@@ -408,7 +502,23 @@ export class ProductsService implements OnModuleInit {
       throw new NotFoundException('分類不存在。');
     }
 
+    const productIds = await this.prisma.product.findMany({
+      where: { category },
+      select: { id: true },
+    });
+
     await this.prisma.$transaction(async (tx) => {
+      await tx.featuredProductSetting.updateMany({
+        where: {
+          productId: {
+            in: productIds.map((item) => item.id),
+          },
+        },
+        data: {
+          productId: null,
+        },
+      });
+
       await tx.product.deleteMany({
         where: { category },
       });
@@ -430,6 +540,58 @@ export class ProductsService implements OnModuleInit {
     return {
       message: '分類刪除成功。',
     };
+  }
+
+    private async ensureFeaturedProductSlots(): Promise<void> {
+    for (const slot of [1, 2, 3]) {
+      await this.prisma.featuredProductSetting.upsert({
+        where: { slot },
+        update: {},
+        create: { slot },
+      });
+    }
+  }
+
+  private async getFeaturedProductEntries(): Promise<FeaturedProductEntry[]> {
+    await this.ensureFeaturedProductSlots();
+
+    const settings = await this.prisma.featuredProductSetting.findMany({
+      orderBy: { slot: 'asc' },
+    });
+
+    const productIds = settings
+      .map((item) => item.productId)
+      .filter((value): value is string => Boolean(value));
+
+    const products = productIds.length
+      ? await this.prisma.product.findMany({
+          where: {
+            id: {
+              in: productIds,
+            },
+          },
+        })
+      : [];
+
+    const productMap = new Map(products.map((product) => [product.id, product]));
+
+    return [1, 2, 3].map((slot) => {
+      const setting = settings.find((item) => item.slot === slot);
+      const product = setting?.productId ? productMap.get(setting.productId) ?? null : null;
+
+      return {
+        slot,
+        productId: setting?.productId ?? null,
+        tag: setting?.tag ?? null,
+        description: setting?.description ?? null,
+        product,
+      };
+    });
+  }
+
+  private toNullableTrimmed(value?: string | null): string | null {
+    const trimmed = value?.trim();
+    return trimmed ? trimmed : null;
   }
 
   private async ensureUniqueSortOrder(
@@ -513,5 +675,6 @@ export class ProductsService implements OnModuleInit {
     return `p_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
   }
 }
+
 
 

@@ -1,4 +1,4 @@
-import {
+﻿import {
   Body,
   Controller,
   Delete,
@@ -11,6 +11,7 @@ import {
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateCategoryOrderDto } from './dto/update-category-order.dto';
+import { UpdateFeaturedProductsDto } from './dto/update-featured-products.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import {
   type CreateProductResponse,
@@ -18,6 +19,8 @@ import {
   ProductsService,
   type ProductsResponse,
   type UpdateCategoryOrderResponse,
+  type UpdateFeaturedProductsResponse,
+  type FeaturedProductsResponse,
   type UpdateProductResponse,
 } from './products.service';
 
@@ -31,11 +34,23 @@ export class AdminProductsController {
     return this.productsService.getAdminProducts();
   }
 
+  @Get('featured')
+  getAdminFeaturedProducts(): Promise<FeaturedProductsResponse> {
+    return this.productsService.getAdminFeaturedProducts();
+  }
+
   @Post()
   createProduct(
     @Body() createProductDto: CreateProductDto,
   ): Promise<CreateProductResponse> {
     return this.productsService.createProduct(createProductDto);
+  }
+
+  @Patch('featured')
+  updateFeaturedProducts(
+    @Body() updateFeaturedProductsDto: UpdateFeaturedProductsDto,
+  ): Promise<UpdateFeaturedProductsResponse> {
+    return this.productsService.updateFeaturedProducts(updateFeaturedProductsDto);
   }
 
   @Patch('category-order')
@@ -67,3 +82,4 @@ export class AdminProductsController {
     return this.productsService.deleteProduct(productId);
   }
 }
+

@@ -232,6 +232,7 @@ export class ProductsService implements OnModuleInit {
   ): Promise<CreateProductResponse> {
     const category = createProductDto.category.trim();
     const sortOrder = createProductDto.sortOrder ?? 0;
+    const priceFields = this.normalizePricePayload(createProductDto);
     const existingCategory = await this.prisma.product.findFirst({
       where: { category },
       select: { categoryOrder: true },
@@ -250,9 +251,9 @@ export class ProductsService implements OnModuleInit {
             name: createProductDto.name.trim(),
             description: createProductDto.description?.trim() || null,
             imageUrl: createProductDto.imageUrl?.trim() || null,
-            price: createProductDto.price ?? null,
-            priceSmall: createProductDto.priceSmall ?? null,
-            priceLarge: createProductDto.priceLarge ?? null,
+            price: priceFields.price ?? null,
+            priceSmall: priceFields.priceSmall ?? null,
+            priceLarge: priceFields.priceLarge ?? null,
             isActive: true,
             sortOrder,
           },
@@ -289,9 +290,9 @@ export class ProductsService implements OnModuleInit {
           name: createProductDto.name.trim(),
           description: createProductDto.description?.trim() || null,
           imageUrl: createProductDto.imageUrl?.trim() || null,
-          price: createProductDto.price ?? null,
-          priceSmall: createProductDto.priceSmall ?? null,
-          priceLarge: createProductDto.priceLarge ?? null,
+          price: priceFields.price ?? null,
+          priceSmall: priceFields.priceSmall ?? null,
+          priceLarge: priceFields.priceLarge ?? null,
           isActive: true,
           sortOrder,
         },
@@ -323,6 +324,20 @@ export class ProductsService implements OnModuleInit {
       updateProductDto.category?.trim() ?? existingProduct.category;
     const nextSortOrder =
       updateProductDto.sortOrder ?? existingProduct.sortOrder;
+    const priceFields = this.normalizePricePayload({
+      price:
+        updateProductDto.price === undefined
+          ? existingProduct.price
+          : updateProductDto.price,
+      priceSmall:
+        updateProductDto.priceSmall === undefined
+          ? existingProduct.priceSmall
+          : updateProductDto.priceSmall,
+      priceLarge:
+        updateProductDto.priceLarge === undefined
+          ? existingProduct.priceLarge
+          : updateProductDto.priceLarge,
+    });
     const isSameCategory = nextCategory === existingProduct.category;
 
     if (!isSameCategory) {
@@ -381,9 +396,9 @@ export class ProductsService implements OnModuleInit {
             updateProductDto.imageUrl === undefined
               ? undefined
               : updateProductDto.imageUrl?.trim() || null,
-          price: updateProductDto.price ?? undefined,
-          priceSmall: updateProductDto.priceSmall ?? undefined,
-          priceLarge: updateProductDto.priceLarge ?? undefined,
+          price: priceFields.price,
+          priceSmall: priceFields.priceSmall,
+          priceLarge: priceFields.priceLarge,
           sortOrder: updateProductDto.sortOrder,
         },
       });
@@ -592,6 +607,41 @@ export class ProductsService implements OnModuleInit {
   private toNullableTrimmed(value?: string | null): string | null {
     const trimmed = value?.trim();
     return trimmed ? trimmed : null;
+  }
+
+  private normalizePricePayload(pricePayload: {
+    price?: number | null;
+    priceSmall?: number | null;
+    priceLarge?: number | null;
+  }): {
+    price?: number | null;
+    priceSmall?: number | null;
+    priceLarge?: number | null;
+  } {
+    if (pricePayload.price !== undefined && pricePayload.price !== null) {
+      return {
+        price: pricePayload.price,
+        priceSmall: null,
+        priceLarge: null,
+      };
+    }
+
+    if (
+      (pricePayload.priceSmall !== undefined && pricePayload.priceSmall !== null) ||
+      (pricePayload.priceLarge !== undefined && pricePayload.priceLarge !== null)
+    ) {
+      return {
+        price: null,
+        priceSmall: pricePayload.priceSmall ?? null,
+        priceLarge: pricePayload.priceLarge ?? null,
+      };
+    }
+
+    return {
+      price: pricePayload.price,
+      priceSmall: pricePayload.priceSmall,
+      priceLarge: pricePayload.priceLarge,
+    };
   }
 
   private async ensureUniqueSortOrder(

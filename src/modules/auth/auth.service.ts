@@ -431,10 +431,15 @@ export class AuthService {
     };
   }
 
-  renewSession(response: Response, userId: string, isAdmin: boolean): void {
+  renewSession(
+    response: Response,
+    userId: string,
+    isAdmin: boolean,
+    cookieName = 'goose_session',
+  ): void {
     const sessionToken = this.createSessionToken(userId, isAdmin);
     response.cookie(
-      'goose_session',
+      cookieName,
       sessionToken,
       this.getCookieOptions(isAdmin),
     );

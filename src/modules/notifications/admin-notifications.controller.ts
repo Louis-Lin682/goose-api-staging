@@ -18,7 +18,7 @@ import {
   type MarkNotificationReadResponse,
 } from './notifications.service';
 
-const AUTH_COOKIE_NAME = 'goose_session';
+const AUTH_COOKIE_NAME = 'goose_admin_session';
 
 @UseGuards(AdminGuard)
 @Controller('admin/notifications')
@@ -35,7 +35,12 @@ export class AdminNotificationsController {
   ): Promise<AdminNotificationsResponse> {
     const user = await this.getAuthenticatedUser(cookieHeader);
     if (response) {
-      this.authService.renewSession(response, user.id, user.isAdmin);
+      this.authService.renewSession(
+        response,
+        user.id,
+        true,
+        AUTH_COOKIE_NAME,
+      );
     }
     return this.notificationsService.getAdminNotifications(user.id);
   }
@@ -47,7 +52,12 @@ export class AdminNotificationsController {
   ): Promise<MarkAllNotificationsReadResponse> {
     const user = await this.getAuthenticatedUser(cookieHeader);
     if (response) {
-      this.authService.renewSession(response, user.id, user.isAdmin);
+      this.authService.renewSession(
+        response,
+        user.id,
+        true,
+        AUTH_COOKIE_NAME,
+      );
     }
     return this.notificationsService.markAllAsRead(user.id);
   }
@@ -60,7 +70,12 @@ export class AdminNotificationsController {
   ): Promise<MarkNotificationReadResponse> {
     const user = await this.getAuthenticatedUser(cookieHeader);
     if (response) {
-      this.authService.renewSession(response, user.id, user.isAdmin);
+      this.authService.renewSession(
+        response,
+        user.id,
+        true,
+        AUTH_COOKIE_NAME,
+      );
     }
     return this.notificationsService.markAsRead(user.id, notificationId);
   }

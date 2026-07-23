@@ -6,6 +6,7 @@ import {
   Post,
   Query,
   Res,
+  UnauthorizedException,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
@@ -22,6 +23,7 @@ import {
 } from './auth.service';
 
 const AUTH_COOKIE_NAME = 'goose_session';
+const ADMIN_AUTH_COOKIE_NAME = 'goose_admin_session';
 
 @Controller('auth')
 export class AuthController {
@@ -47,6 +49,30 @@ export class AuthController {
       AUTH_COOKIE_NAME,
       sessionToken,
       this.authService.getCookieOptions(result.user.isAdmin),
+    );
+
+    return result;
+  }
+
+  @Post('admin/login')
+  async adminLogin(
+    @Body() loginDto: LoginDto,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<LoginResponse> {
+    const result = await this.authService.login(loginDto);
+
+    if (!result.user.isAdmin) {
+      throw new UnauthorizedException('此帳號沒有後台管理權限。');
+    }
+
+    const sessionToken = this.authService.createSessionToken(
+      result.user.id,
+      true,
+    );
+    response.cookie(
+      ADMIN_AUTH_COOKIE_NAME,
+      sessionToken,
+      this.authService.getCookieOptions(true),
     );
 
     return result;
@@ -118,6 +144,35 @@ export class AuthController {
     return { user };
   }
 
+  @Get('admin/me')
+  async adminMe(
+    @Headers('cookie') cookieHeader: string | undefined,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<{ user: AuthUser | null }> {
+    const sessionToken = this.getCookieValue(
+      cookieHeader,
+      ADMIN_AUTH_COOKIE_NAME,
+    );
+
+    if (!sessionToken) {
+      return { user: null };
+    }
+
+    const user = await this.authService.getAuthenticatedUser(sessionToken);
+
+    if (!user.isAdmin) {
+      return { user: null };
+    }
+
+    this.authService.renewSession(
+      response,
+      user.id,
+      true,
+      ADMIN_AUTH_COOKIE_NAME,
+    );
+    return { user };
+  }
+
   @Post('logout')
   logout(@Res({ passthrough: true }) response: Response): { message: string } {
     response.clearCookie(
@@ -128,6 +183,18 @@ export class AuthController {
     return {
       message: 'Logout success',
     };
+  }
+
+  @Post('admin/logout')
+  adminLogout(
+    @Res({ passthrough: true }) response: Response,
+  ): { message: string } {
+    response.clearCookie(
+      ADMIN_AUTH_COOKIE_NAME,
+      this.authService.getClearCookieOptions(),
+    );
+
+    return { message: 'Logout success' };
   }
 
   private getCookieValue(

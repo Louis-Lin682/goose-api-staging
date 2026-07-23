@@ -8,7 +8,7 @@ import {
 import type { Request } from 'express';
 import { AuthService } from '../../modules/auth/auth.service';
 
-const AUTH_COOKIE_NAME = 'goose_session';
+const AUTH_COOKIE_NAME = 'goose_admin_session';
 
 @Injectable()
 export class AdminGuard implements CanActivate {

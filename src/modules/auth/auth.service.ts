@@ -161,7 +161,7 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new UnauthorizedException('?????Email ?????');
+      throw new UnauthorizedException('手機號碼、Email 或密碼錯誤。');
     }
 
     const isPasswordValid = await argon2.verify(
@@ -170,7 +170,7 @@ export class AuthService {
     );
 
     if (!isPasswordValid) {
-      throw new UnauthorizedException('?????Email ?????');
+      throw new UnauthorizedException('手機號碼、Email 或密碼錯誤。');
     }
 
     const syncedUser = await this.syncBootstrapAdminRole({

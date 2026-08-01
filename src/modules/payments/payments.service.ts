@@ -194,7 +194,9 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  buildEcpayResultRedirectUrl(payload: Record<string, string>): string {
+  async buildEcpayResultRedirectUrl(
+    payload: Record<string, string>,
+  ): Promise<string> {
     this.logger.log(
       `ECPay order result received: ${JSON.stringify({
         MerchantTradeNo: payload.MerchantTradeNo,
@@ -204,6 +206,10 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
         PaymentType: payload.PaymentType,
       })}`,
     );
+
+    if (payload.RtnCode === '1') {
+      await this.markOrderPaidFromEcpayPayload(payload);
+    }
 
     const redirectUrl = new URL('/payment/ecpay/result', this.frontendBaseUrl);
 

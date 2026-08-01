@@ -79,12 +79,12 @@ export class PaymentsController {
   }
 
   @Post('result')
-  handleResult(
+  async handleResult(
     @Req() request: Request,
     @Body() payload: Record<string, string>,
     @Headers('content-type') contentType: string | undefined,
     @Res() response: Response,
-  ): void {
+  ): Promise<void> {
     this.logger.log(
       `ECPay result controller payload: ${JSON.stringify({
         method: request.method,
@@ -96,15 +96,15 @@ export class PaymentsController {
     );
 
     const redirectUrl =
-      this.paymentsService.buildEcpayResultRedirectUrl(payload);
+      await this.paymentsService.buildEcpayResultRedirectUrl(payload);
     response.redirect(302, redirectUrl);
   }
 
   @Get('result')
-  handleResultFallback(
+  async handleResultFallback(
     @Query() payload: Record<string, string>,
     @Res() response: Response,
-  ): void {
+  ): Promise<void> {
     this.logger.log(
       `ECPay result fallback payload: ${JSON.stringify({
         keys: Object.keys(payload ?? {}),
@@ -113,7 +113,7 @@ export class PaymentsController {
     );
 
     const redirectUrl =
-      this.paymentsService.buildEcpayResultRedirectUrl(payload);
+      await this.paymentsService.buildEcpayResultRedirectUrl(payload);
     response.redirect(302, redirectUrl);
   }
 

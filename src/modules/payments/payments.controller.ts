@@ -10,11 +10,13 @@ import {
   Req,
   Res,
   Body,
+  UseGuards,
 } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 import type { Request, Response } from 'express';
 import { AuthService, type AuthUser } from '../auth/auth.service';
 import { CreateEcpayCheckoutDto } from './dto/create-ecpay-checkout.dto';
+import { AdminGuard } from '../../common/guards/admin.guard';
 import {
   PaymentsService,
   type EcpayCheckoutResponse,
@@ -45,6 +47,7 @@ export class PaymentsController {
   }
 
   @Post('dev-simulate-paid')
+  @UseGuards(AdminGuard)
   async handleDevSimulatePaid(@Body() payload: { orderId: string }): Promise<{
     message: string;
     orderId: string;
@@ -76,12 +79,12 @@ export class PaymentsController {
   }
 
   @Post('result')
-  async handleResult(
+  handleResult(
     @Req() request: Request,
     @Body() payload: Record<string, string>,
     @Headers('content-type') contentType: string | undefined,
     @Res() response: Response,
-  ): Promise<void> {
+  ): void {
     this.logger.log(
       `ECPay result controller payload: ${JSON.stringify({
         method: request.method,
@@ -93,15 +96,15 @@ export class PaymentsController {
     );
 
     const redirectUrl =
-      await this.paymentsService.buildEcpayResultRedirectUrl(payload);
+      this.paymentsService.buildEcpayResultRedirectUrl(payload);
     response.redirect(302, redirectUrl);
   }
 
   @Get('result')
-  async handleResultFallback(
+  handleResultFallback(
     @Query() payload: Record<string, string>,
     @Res() response: Response,
-  ): Promise<void> {
+  ): void {
     this.logger.log(
       `ECPay result fallback payload: ${JSON.stringify({
         keys: Object.keys(payload ?? {}),
@@ -110,7 +113,7 @@ export class PaymentsController {
     );
 
     const redirectUrl =
-      await this.paymentsService.buildEcpayResultRedirectUrl(payload);
+      this.paymentsService.buildEcpayResultRedirectUrl(payload);
     response.redirect(302, redirectUrl);
   }
 

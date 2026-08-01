@@ -657,7 +657,7 @@ export class AuthService {
   }
   private shouldExposeResetToken(): boolean {
     return (
-      process.env.NODE_ENV !== 'production' ||
+      process.env.NODE_ENV === 'development' &&
       process.env.PASSWORD_RESET_DEBUG === 'true'
     );
   }

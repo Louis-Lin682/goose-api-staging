@@ -108,12 +108,12 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       throw new NotFoundException('Order not found.');
     }
 
-    if (order.userId && userId && order.userId !== userId) {
-      throw new ForbiddenException('這筆訂單不屬於目前登入的會員。');
+    if (!userId) {
+      throw new ForbiddenException('請先登入會員，再建立付款。');
     }
 
-    if (!order.userId && userId === undefined) {
-      throw new ForbiddenException('請先登入會員，再建立付款。');
+    if (!order.userId || order.userId !== userId) {
+      throw new ForbiddenException('這筆訂單不屬於目前登入的會員。');
     }
 
     if (order.paymentMethod !== PaymentMethod.online) {
@@ -194,9 +194,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  async buildEcpayResultRedirectUrl(
-    payload: Record<string, string>,
-  ): Promise<string> {
+  buildEcpayResultRedirectUrl(payload: Record<string, string>): string {
     this.logger.log(
       `ECPay order result received: ${JSON.stringify({
         MerchantTradeNo: payload.MerchantTradeNo,
@@ -207,19 +205,11 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       })}`,
     );
 
-    if (payload.RtnCode === '1') {
-      await this.markOrderPaidFromEcpayPayload(payload);
-    } else {
-      await this.markOrderPaymentFailedFromEcpayPayload(payload);
-    }
-
     const redirectUrl = new URL('/payment/ecpay/result', this.frontendBaseUrl);
 
-    Object.entries(payload).forEach(([key, value]) => {
-      if (typeof value === 'string' && value !== '') {
-        redirectUrl.searchParams.set(key, value);
-      }
-    });
+    if (payload.CustomField1) {
+      redirectUrl.searchParams.set('orderId', payload.CustomField1);
+    }
 
     return redirectUrl.toString();
   }
@@ -231,10 +221,9 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     status: OrderStatus;
   }> {
     if (
-      (this.configService.get<string>('NODE_ENV') ?? 'development') ===
-      'production'
+      this.configService.get<string>('ENABLE_PAYMENT_SIMULATION') !== 'true'
     ) {
-      throw new ForbiddenException('正式環境不可使用模擬付款功能。');
+      throw new ForbiddenException('模擬付款功能未啟用。');
     }
 
     const order = await this.prisma.order.findUnique({
@@ -307,6 +296,27 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
     if (expectedCheckMacValue !== receivedCheckMacValue) {
       this.logger.warn('Invalid CheckMacValue from ECPay notification');
       throw new BadRequestException('Invalid CheckMacValue');
+    }
+
+    if (payload.MerchantID !== this.merchantId) {
+      throw new BadRequestException('Invalid MerchantID');
+    }
+
+    const order = await this.resolveOrderForEcpayPayload(payload);
+
+    if (!order) {
+      throw new NotFoundException('Order not found.');
+    }
+
+    if (
+      order.paymentMethod !== PaymentMethod.online ||
+      payload.CustomField1 !== order.id ||
+      payload.CustomField2 !== order.orderNumber ||
+      payload.MerchantTradeNo !== order.merchantTradeNo ||
+      Number(payload.TradeAmt) !== order.totalAmount
+    ) {
+      this.logger.warn(`ECPay notification order data mismatch: ${order.id}`);
+      throw new BadRequestException('Payment data does not match order');
     }
 
     if (payload.RtnCode === '1') {
@@ -464,6 +474,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
         select: {
           id: true,
           orderNumber: true,
+          merchantTradeNo: true,
           recipientName: true,
           totalAmount: true,
           paymentMethod: true,
@@ -487,6 +498,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
         select: {
           id: true,
           orderNumber: true,
+          merchantTradeNo: true,
           recipientName: true,
           totalAmount: true,
           paymentMethod: true,
@@ -510,6 +522,7 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
         select: {
           id: true,
           orderNumber: true,
+          merchantTradeNo: true,
           recipientName: true,
           totalAmount: true,
           paymentMethod: true,
@@ -568,40 +581,6 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
           error instanceof Error ? error.stack : undefined,
         );
       }
-    }
-  }
-
-  private async markOrderPaymentFailedFromEcpayPayload(
-    payload: Record<string, string>,
-  ): Promise<void> {
-    const order = await this.resolveOrderForEcpayPayload(payload);
-
-    if (!order) {
-      throw new NotFoundException('Order not found.');
-    }
-
-    if (order.paymentMethod !== PaymentMethod.online) {
-      return;
-    }
-
-    if (order.paymentStatus === PaymentStatus.PAID) {
-      return;
-    }
-
-    if (
-      order.paymentStatus !== PaymentStatus.FAILED ||
-      order.status !== OrderStatus.PENDING
-    ) {
-      await this.prisma.order.update({
-        where: { id: order.id },
-        data: {
-          paymentStatus: PaymentStatus.FAILED,
-          status: OrderStatus.PENDING,
-          tradeNo: payload.TradeNo || null,
-          paidAt: null,
-          paymentProvider: PaymentProvider.ECPAY,
-        },
-      });
     }
   }
 

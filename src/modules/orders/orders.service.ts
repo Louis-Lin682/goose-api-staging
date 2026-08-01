@@ -127,16 +127,48 @@ export class OrdersService {
     createOrderDto: CreateOrderDto,
     userId?: string,
   ): Promise<CreateOrderResponse> {
-    const normalizedItems = createOrderDto.items.map((item) => ({
-      itemId: item.id.trim(),
-      itemName: item.name.trim(),
-      itemCategory: item.category.trim(),
-      itemSubCategory: item.subCategory.trim(),
-      variant: item.selectedVariant.trim(),
-      unitPrice: item.finalPrice,
-      quantity: item.quantity,
-      lineTotal: item.finalPrice * item.quantity,
-    }));
+    const requestedProductIds = [
+      ...new Set(createOrderDto.items.map((item) => item.id.trim())),
+    ];
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: requestedProductIds } },
+      select: {
+        id: true,
+        name: true,
+        category: true,
+        subCategory: true,
+        price: true,
+        priceSmall: true,
+        priceLarge: true,
+        isActive: true,
+      },
+    });
+    const productsById = new Map(
+      products.map((product) => [product.id, product]),
+    );
+
+    const normalizedItems = createOrderDto.items.map((item) => {
+      const productId = item.id.trim();
+      const variant = item.selectedVariant.trim();
+      const product = productsById.get(productId);
+
+      if (!product || !product.isActive) {
+        throw new BadRequestException(`Product ${productId} is unavailable.`);
+      }
+
+      const unitPrice = this.getProductVariantPrice(product, variant);
+
+      return {
+        itemId: product.id,
+        itemName: product.name,
+        itemCategory: product.category,
+        itemSubCategory: product.subCategory,
+        variant,
+        unitPrice,
+        quantity: item.quantity,
+        lineTotal: unitPrice * item.quantity,
+      };
+    });
 
     const subtotal = normalizedItems.reduce(
       (sum, item) => sum + item.lineTotal,
@@ -716,6 +748,31 @@ export class OrdersService {
     }
 
     return 0;
+  }
+
+  private getProductVariantPrice(
+    product: {
+      id: string;
+      price: number | null;
+      priceSmall: number | null;
+      priceLarge: number | null;
+    },
+    variant: string,
+  ): number {
+    const priceByVariant: Record<string, number | null> = {
+      single: product.price,
+      small: product.priceSmall,
+      large: product.priceLarge,
+    };
+    const price = priceByVariant[variant];
+
+    if (!Number.isInteger(price) || (price ?? 0) < 0) {
+      throw new BadRequestException(
+        `Variant ${variant || '(empty)'} is unavailable for product ${product.id}.`,
+      );
+    }
+
+    return price as number;
   }
 
   private getCodFee(

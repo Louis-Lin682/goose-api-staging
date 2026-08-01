@@ -40,15 +40,20 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ): Promise<LoginResponse> {
     const result = await this.authService.login(loginDto);
+
+    if (result.user.isAdmin) {
+      throw new UnauthorizedException('管理員請由後台登入。');
+    }
+
     const sessionToken = this.authService.createSessionToken(
       result.user.id,
-      result.user.isAdmin,
+      false,
     );
 
     response.cookie(
       AUTH_COOKIE_NAME,
       sessionToken,
-      this.authService.getCookieOptions(result.user.isAdmin),
+      this.authService.getCookieOptions(false),
     );
 
     return result;
@@ -97,15 +102,20 @@ export class AuthController {
   ): Promise<void> {
     try {
       const result = await this.authService.handleLineCallback({ code, state });
+
+      if (result.user.isAdmin) {
+        throw new UnauthorizedException('管理員請由後台登入。');
+      }
+
       const sessionToken = this.authService.createSessionToken(
         result.user.id,
-        result.user.isAdmin,
+        false,
       );
 
       response.cookie(
         AUTH_COOKIE_NAME,
         sessionToken,
-        this.authService.getCookieOptions(result.user.isAdmin),
+        this.authService.getCookieOptions(false),
       );
       response.redirect(result.redirectUrl);
     } catch (error) {

@@ -231,8 +231,14 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
       select: {
         id: true,
         orderNumber: true,
+        recipientName: true,
+        totalAmount: true,
         paymentMethod: true,
         paymentStatus: true,
+        notifications: {
+          select: { id: true },
+          take: 1,
+        },
       },
     });
 
@@ -255,6 +261,22 @@ export class PaymentsService implements OnModuleInit, OnModuleDestroy {
           paymentProvider: PaymentProvider.ECPAY,
         },
       });
+    }
+
+    if (order.notifications.length === 0) {
+      try {
+        await this.notificationsService.createNewOrderNotification({
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          recipientName: order.recipientName,
+          totalAmount: order.totalAmount,
+        });
+      } catch (error) {
+        this.logger.error(
+          `Failed to create simulated paid-order notification for ${order.orderNumber}`,
+          error instanceof Error ? error.stack : undefined,
+        );
+      }
     }
 
     this.logger.log(`ECPay simulated paid for order ${order.orderNumber}`);
